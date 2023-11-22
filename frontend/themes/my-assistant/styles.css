@@ -1,0 +1,10 @@
+@import url('./main-layout.css');
+@import url('./views/assistant-view.css');
+@import url('./views/feed-view.css');
+@import url('./views/products-view.css');
+@import url('./views/checkout-form-view.css');
+@import url('./views/product-catalog-view.css');
+@import url('@fontsource/walter-turncoat/index.css');    html {
+--lumo-font-family: Walter Turncoat;
+
+    }

@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-assistant
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-assistant
+  template:
+    metadata:
+      labels:
+        app: my-assistant
+    spec:
+      containers:
+        - name: my-assistant
+          image: my-assistant:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: '1'
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-assistant-balancer
+spec:
+  selector:
+    app: my-assistant
+  ports:
+    - protocol: TCP
+      port: 8000 # The port to expose to the outside
+      targetPort: 8080 # The port the application is running on in the pods
+  type: LoadBalancer
+  sessionAffinity: ClientIP
