@@ -1,7 +1,10 @@
 package com.samistax.application.views.feed;
 
+import java.util.UUID;
+
 public class Person {
 
+    private String id;
     private String image;
     private String name;
     private String date;
@@ -11,6 +14,15 @@ public class Person {
     private String shares;
 
     public Person() {
+        id = UUID.randomUUID().toString();
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getImage() {

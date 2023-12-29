@@ -11,3 +11,10 @@
   background-color: var(--lumo-base-color);
   box-shadow: var(--lumo-box-shadow-s);
 }
+
+
+
+.products-view .price {
+  background-color: var(--lumo-base-color);
+  color: red;
+}

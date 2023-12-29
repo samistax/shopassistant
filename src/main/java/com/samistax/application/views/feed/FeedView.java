@@ -1,6 +1,9 @@
 package com.samistax.application.views.feed;
 
 import com.samistax.application.views.MainLayout;
+import com.samistax.application.views.assistant.AssistantView;
+import com.vaadin.collaborationengine.UserInfo;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
@@ -10,15 +13,15 @@ import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.router.AfterNavigationEvent;
-import com.vaadin.flow.router.AfterNavigationObserver;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.*;
+import com.vaadin.flow.server.VaadinSession;
+
 import java.util.Arrays;
 import java.util.List;
 
-@PageTitle("Feed")
+@PageTitle("Select Demo user")
 @Route(value = "feed", layout = MainLayout.class)
+@RouteAlias(value = "", layout = MainLayout.class)
 public class FeedView extends Div implements AfterNavigationObserver {
 
     Grid<Person> grid = new Grid<>();
@@ -29,6 +32,10 @@ public class FeedView extends Div implements AfterNavigationObserver {
         grid.setHeight("100%");
         grid.addThemeVariants(GridVariant.LUMO_NO_BORDER, GridVariant.LUMO_NO_ROW_BORDERS);
         grid.addComponentColumn(person -> createCard(person));
+        grid.addItemClickListener( e -> {
+            VaadinSession.getCurrent().setAttribute(Person.class, e.getItem());
+            UI.getCurrent().navigate(AssistantView.class);
+        });
         add(grid);
     }
 
@@ -136,7 +143,11 @@ public class FeedView extends Div implements AfterNavigationObserver {
                         "1K", "500", "20")
 
         );
-
+        // Select and set active user into session for other views to access the "logged in" user unless already set
+        Person currentUser = VaadinSession.getCurrent().getAttribute(Person.class);
+        if ( currentUser == null ) {
+            VaadinSession.getCurrent().setAttribute(Person.class, persons.get(0));
+        }
         grid.setItems(persons);
     }
 

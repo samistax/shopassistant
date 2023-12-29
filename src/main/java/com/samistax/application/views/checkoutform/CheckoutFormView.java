@@ -1,7 +1,11 @@
 package com.samistax.application.views.checkoutform;
 
 import com.samistax.application.views.MainLayout;
+import com.samistax.application.views.feed.Person;
+import com.samistax.application.views.products.Cart;
+import com.samistax.application.views.products.CartItem;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
@@ -15,6 +19,8 @@ import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.theme.lumo.LumoUtility;
 import com.vaadin.flow.theme.lumo.LumoUtility.AlignItems;
 import com.vaadin.flow.theme.lumo.LumoUtility.Background;
 import com.vaadin.flow.theme.lumo.LumoUtility.BorderRadius;
@@ -35,6 +41,7 @@ import com.vaadin.flow.theme.lumo.LumoUtility.Position;
 import com.vaadin.flow.theme.lumo.LumoUtility.TextColor;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 @PageTitle("Checkout Form")
@@ -44,6 +51,7 @@ public class CheckoutFormView extends Div {
     private static final Set<String> states = new LinkedHashSet<>();
     private static final Set<String> countries = new LinkedHashSet<>();
 
+    private Main mainContent;
     static {
         states.addAll(Arrays.asList("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
                 "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas",
@@ -90,17 +98,20 @@ public class CheckoutFormView extends Div {
                 "Zimbabwe"));
     }
 
+
     public CheckoutFormView() {
+
         addClassNames("checkout-form-view");
         addClassNames(Display.FLEX, FlexDirection.COLUMN, Height.FULL);
 
-        Main content = new Main();
-        content.addClassNames(Display.GRID, Gap.XLARGE, AlignItems.START, JustifyContent.CENTER, MaxWidth.SCREEN_MEDIUM,
+        mainContent = new Main();
+        mainContent.addClassNames(Display.GRID, Gap.XLARGE, AlignItems.START, JustifyContent.CENTER, MaxWidth.SCREEN_MEDIUM,
                 Margin.Horizontal.AUTO, Padding.Bottom.LARGE, Padding.Horizontal.LARGE);
 
-        content.add(createCheckoutForm());
-        content.add(createAside());
-        add(content);
+        mainContent.add(createCheckoutForm());
+        mainContent.add(createAside());
+
+        add(mainContent);
     }
 
     private Component createCheckoutForm() {
@@ -284,12 +295,55 @@ public class CheckoutFormView extends Div {
         UnorderedList ul = new UnorderedList();
         ul.addClassNames(ListStyleType.NONE, Margin.NONE, Padding.NONE, Display.FLEX, FlexDirection.COLUMN, Gap.MEDIUM);
 
-        ul.add(createListItem("Vanilla cracker", "With wholemeal flour", "$7.00"));
-        ul.add(createListItem("Vanilla blueberry cake", "With blueberry jam", "$8.00"));
-        ul.add(createListItem("Vanilla pastry", "With wholemeal flour", "$5.00"));
+
+        Person user = VaadinSession.getCurrent().getAttribute(Person.class);
+        Cart cart = VaadinSession.getCurrent().getAttribute(Cart.class);
+        if (user != null && cart != null) {
+            List<CartItem> items = cart.getCart(user.getId());
+            if (items.isEmpty()) {
+                ul.add("- No items in your cart -");
+            } else {
+                items.forEach(item -> ul.add(createListItem(item)));
+            }
+        } else {
+            ul.add(createListItem("Vanilla cracker", "With wholemeal flour", "$7.00"));
+            ul.add(createListItem("Vanilla blueberry cake", "With blueberry jam", "$8.00"));
+            ul.add(createListItem("Vanilla pastry", "With wholemeal flour", "$5.00"));
+        }
 
         aside.add(headerSection, ul);
         return aside;
+    }
+    private ListItem createListItem(CartItem cartItem) {
+        ListItem item = new ListItem();
+        item.addClassNames(Display.FLEX, JustifyContent.BETWEEN);
+
+        Div subSection = new Div();
+        subSection.addClassNames(Display.FLEX, FlexDirection.COLUMN);
+
+        subSection.add(new Span(cartItem.getName()));
+        Span secondarySpan = new Span(cartItem.getBrand());
+        secondarySpan.addClassNames(FontSize.SMALL, TextColor.SECONDARY);
+        subSection.add(secondarySpan);
+
+        Span priceSpan = new Span(""+cartItem.getPrice());
+        Icon delete = VaadinIcon.TRASH.create();
+        delete.addClassNames(LumoUtility.AlignSelf.BASELINE, Margin.SMALL);
+        delete.setSize("16px");
+        delete.addClickListener(e-> {
+            Person user = VaadinSession.getCurrent().getAttribute(Person.class);
+            Cart shopCart = VaadinSession.getCurrent().getAttribute(Cart.class);
+            if (user != null && shopCart != null) {
+                boolean success = shopCart.removeItem(user.getId(), cartItem);
+                mainContent.removeAll();
+                mainContent.add(createCheckoutForm());
+                mainContent.add(createAside());
+            }
+        });
+        priceSpan.add(delete);
+
+        item.add(subSection, priceSpan);
+        return item;
     }
 
     private ListItem createListItem(String primary, String secondary, String price) {

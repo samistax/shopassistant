@@ -1,10 +1,20 @@
 package com.samistax.application.views.products;
 
+import com.samistax.application.data.astra.json.Product;
+import com.samistax.application.views.feed.Person;
+import com.vaadin.flow.component.ComponentEvent;
+import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.ListItem;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.theme.lumo.LumoUtility.AlignItems;
 import com.vaadin.flow.theme.lumo.LumoUtility.Background;
 import com.vaadin.flow.theme.lumo.LumoUtility.BorderRadius;
@@ -18,12 +28,46 @@ import com.vaadin.flow.theme.lumo.LumoUtility.Overflow;
 import com.vaadin.flow.theme.lumo.LumoUtility.Padding;
 import com.vaadin.flow.theme.lumo.LumoUtility.TextColor;
 import com.vaadin.flow.theme.lumo.LumoUtility.Width;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 
 public class ProductsViewCard extends ListItem {
 
-    public ProductsViewCard(String text, String url) {
+    public static String EVENT_ASSIST = "ai";
+    public static String EVENT_ANN = "ann";
+    public static Button annSearch = new Button("Similar");
+    public static Button aiHelp = new Button(VaadinIcon.INFO_CIRCLE.create());
+
+    public static class SimilarityClickEvent extends ComponentEvent<ProductsViewCard> {
+        private float[] vector = new float[384];
+        public SimilarityClickEvent(ProductsViewCard source) {
+            super(source, false);
+        }
+        public float[] getVector(){return this.vector;}
+        public void setVector(float[] vector){this.vector = vector;}
+    }
+    public static class AssistClickEvent extends ComponentEvent<ProductsViewCard> {
+        private String productId = new String("");
+        public AssistClickEvent(ProductsViewCard source) {
+            super(source, false);
+        }
+        public String getProductId(){return this.productId;}
+        public void setProductId(String productId){this.productId = productId;}
+    }
+
+    @Autowired
+    private Cart cart;
+
+    public ProductsViewCard() {
+        this.cart = cart;
+    }
+
+
+    public ProductsViewCard(Product p, Float similarity, float[] vector) {
         addClassNames(Background.CONTRAST_5, Display.FLEX, FlexDirection.COLUMN, AlignItems.START, Padding.MEDIUM,
                 BorderRadius.LARGE);
+
 
         Div div = new Div();
         div.addClassNames(Background.CONTRAST, Display.FLEX, AlignItems.CENTER, JustifyContent.CENTER,
@@ -32,28 +76,83 @@ public class ProductsViewCard extends ListItem {
 
         Image image = new Image();
         image.setWidth("100%");
-        image.setSrc(url);
-        image.setAlt(text);
+        image.setSrc(p.getImage_url());
+        image.setAlt(p.getName());
 
         div.add(image);
 
         Span header = new Span();
-        header.addClassNames(FontSize.XLARGE, FontWeight.SEMIBOLD);
-        header.setText("Title");
+        header.addClassNames(FontSize.LARGE, FontWeight.SEMIBOLD);
+        header.setText(p.getCategory());
 
         Span subtitle = new Span();
         subtitle.addClassNames(FontSize.SMALL, TextColor.SECONDARY);
-        subtitle.setText("Card subtitle");
+        subtitle.setText(p.getBrand());
 
-        Paragraph description = new Paragraph(
-                "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut.");
+        Paragraph description = new Paragraph(p.getDescription());
         description.addClassName(Margin.Vertical.MEDIUM);
+        description.add(subtitle);
 
         Span badge = new Span();
         badge.getElement().setAttribute("theme", "badge");
-        badge.setText("Label");
+        badge.setText(p.getName());
 
-        add(div, header, subtitle, description, badge);
+        Span price = new Span();
+        price.getElement().setAttribute("theme", "price");
+        price.addClassNames(FontSize.SMALL, TextColor.PRIMARY_CONTRAST);
+        try {
+            double wholesale_price = Double.valueOf(p.getWholesale_price());
+            price.setText(String.format("$%,.2f", wholesale_price));
+        } catch ( Exception ex) {
+            price.setText(ex.getMessage());
+        }
 
+        // Add call to actions
+        Button annSearch = new Button(VaadinIcon.SEARCH.create());
+        annSearch.addClickListener(event -> {
+            SimilarityClickEvent pce = new SimilarityClickEvent(this);
+            pce.setVector(vector);
+            fireEvent(pce);
+        });
+
+
+        Button buyBtn = new Button(VaadinIcon.CART.create());
+        buyBtn.addClickListener(event -> {
+
+            Person user = VaadinSession.getCurrent().getAttribute(Person.class);
+            if ( user != null  ) {
+                Cart shopCart = VaadinSession.getCurrent().getAttribute(Cart.class);
+                if (shopCart == null) {
+                    shopCart = new Cart();
+                }
+                shopCart.addItem(user.getId(), p);
+                // Set the cart to session to be shared with other views./
+                VaadinSession.getCurrent().setAttribute(Cart.class, shopCart);
+            }
+        });
+
+        Button assistBtn = new Button(VaadinIcon.INFO_CIRCLE.create());
+        assistBtn.setTooltipText("Click for AI assistant");
+        assistBtn.addClickListener(event -> {
+            VaadinSession.getCurrent().setAttribute(Product.class, p);
+            AssistClickEvent ace = new AssistClickEvent(this);
+            ace.setProductId(p.getId());
+            fireEvent(ace);
+        });
+
+        HorizontalLayout footer = new HorizontalLayout();
+        footer.setAlignItems(FlexComponent.Alignment.BASELINE);
+        footer.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+        footer.add(badge, price, buyBtn, assistBtn );
+
+        add( div, footer,subtitle,  header,description );
+    }
+    public Registration addAssistClickListener(
+            ComponentEventListener<AssistClickEvent> listener) {
+        return addListener(AssistClickEvent.class, listener);
+    }
+    public Registration addSimilarityClickListener(
+            ComponentEventListener<SimilarityClickEvent> listener) {
+        return addListener(SimilarityClickEvent.class, listener);
     }
 }
