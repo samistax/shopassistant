@@ -143,7 +143,6 @@ public class AssistantView extends HorizontalLayout {
         final String currentUserId = userInfo.getId();
         tabs = new Tabs();
 
-
         for (ChatInfo chatInfo : chats) {
             // Listen for new messages in each chat so we can update the
             // "unread" count

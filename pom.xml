@@ -98,10 +98,10 @@
             <artifactId>astra-spring-boot-3x-starter</artifactId>
             <version>1.1</version>
         </dependency>
-        <dependency>
+        <!--dependency>
             <groupId>org.springframework.data</groupId>
             <artifactId>spring-data-cassandra</artifactId>
-        </dependency>
+        </dependency-->
         <dependency>
             <groupId>com.datastax.astra</groupId>
             <artifactId>astra-db-client</artifactId>
@@ -155,7 +155,11 @@
             <artifactId>langchain4j-cassandra</artifactId>
             <version>${langchain.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.google.cloud.tools</groupId>
+            <artifactId>appengine-maven-plugin</artifactId>
+            <version>2.5.1</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -217,6 +221,15 @@
                                 <phase>compile</phase>
                             </execution>
                         </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.google.cloud.tools</groupId>
+                        <artifactId>appengine-maven-plugin</artifactId>
+                        <version>2.5.1</version>
+                        <configuration>
+                            <projectId>GCLOUD_CONFIG</projectId>
+                            <version>GCLOUD_CONFIG</version>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
