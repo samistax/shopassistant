@@ -22,6 +22,13 @@ ready to be deployed. The file can be found in the `target` folder after the bui
 Once the JAR file is built, you can run it using
 `java -jar target/my-assistant-1.0-SNAPSHOT.jar`
 
+## Initial Product load
+
+When application is started the method **loadSampleProductData()** in Application.java checks if the products collection exist or not. If it does not then it reads 
+the product information from **footwear_sampledata.csv** resource files and stores product properties to AStra DB. 
+It also uses embeds the description of the product using Langchain4J AllMiniLmL6V2EmbeddingModel().  
+
+
 ## Project structure
 
 - `MainLayout.java` in `src/main/java` contains the navigation setup (i.e., the
