@@ -12,9 +12,14 @@
   box-shadow: var(--lumo-box-shadow-s);
 }
 
-
-
 .products-view .price {
   background-color: var(--lumo-base-color);
   color: red;
+}
+
+.products-view vaadin-button {
+  margin: 0px;
+}
+.products-view vaadin-button:hover {
+  color: var(--lumo-contrast-color);
 }

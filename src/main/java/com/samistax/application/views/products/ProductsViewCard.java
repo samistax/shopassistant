@@ -4,6 +4,7 @@ import com.samistax.application.data.astra.json.Product;
 import com.samistax.application.views.feed.Person;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.Unit;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Image;
@@ -75,7 +76,7 @@ public class ProductsViewCard extends ListItem {
         div.setHeight("160px");
 
         Image image = new Image();
-        image.setWidth("100%");
+        image.setHeight(100, Unit.PERCENTAGE);
         image.setSrc(p.getImage_url());
         image.setAlt(p.getName());
 
