@@ -6,7 +6,7 @@ import java.io.File;
 
 @ConfigurationProperties(prefix = "datastax.astra")
 public class AstraClientProperties {
-
+/*
     public File getSecureConnectBundle() {
         return secureConnectBundle;
     }
@@ -17,5 +17,7 @@ public class AstraClientProperties {
 
     private File secureConnectBundle;
 
+
+ */
 
 }

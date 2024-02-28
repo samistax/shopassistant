@@ -2,8 +2,6 @@ package com.samistax.application.ai.tools;
 
 import com.dtsx.astra.sdk.AstraDB;
 import com.dtsx.astra.sdk.AstraDBCollection;
-import com.dtsx.astra.sdk.AstraDBRepository;
-import com.dtsx.astra.sdk.utils.JsonUtils;
 import com.samistax.application.Application;
 import com.samistax.application.data.astra.json.Product;
 import com.samistax.application.services.AstraService;
@@ -11,11 +9,12 @@ import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.stargate.sdk.json.domain.JsonResult;
-import io.stargate.sdk.json.domain.SelectQuery;
-import io.stargate.sdk.json.domain.odm.Result;
+import io.stargate.sdk.data.domain.odm.DocumentResult;
+import io.stargate.sdk.data.domain.query.Filter;
+import io.stargate.sdk.data.domain.query.SelectQuery;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,17 +31,25 @@ public class ShopAssistantTools {
         this.astraService = astraService;
         this.astraDB = astraService.getAstraDB();
     }
+    @Tool("Get the total amount of products available in the web shop.")
+    public int getProductCount() {
+        System.out.println("Agent called: getProductCount");
+        AstraDBCollection collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
+        return collection.countDocuments();
+    }
+
     @Tool("Get product information by product id. Return empty Product in case id not found.")
-    public Product getProductById(String id) {
-        System.out.println("Agent called: getProductById");
-        //AstraDBRepository<Product> productRepository = astraDB.collectionRepository(Application.ASTRA_PRODUCT_TABLE, Product.class);
+    public Product getProductById(String pid) {
+        System.out.println("Agent called: getProductById. ID: " + pid);
         AstraDBCollection collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
         // Retrieve a products from its id
-        //Optional<Result<Product>> result = productRepository.findById(id); // NOTE: products embedded using generated
-        Optional<Result<Product>> result = collection.findOne (
-                SelectQuery.builder()
-                        .where("id")
-                        .isEqualsTo(id)
+        //Optional<DocumentResult<Product>> result = collection.findById(id, Product.class);
+        Filter filter = new Filter()
+                .where("pid")
+                .isEqualsTo(pid);
+
+        Optional<DocumentResult<Product>> result = collection.findOne (
+                SelectQuery.builder().filter(filter)
                         .build(), Product.class);
         if ( result.isPresent() ) {
             return result.get().getData();
@@ -60,7 +67,7 @@ public class ShopAssistantTools {
         List<Product> products = new ArrayList<>();
         AstraDBCollection collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
         // Order the results by similarity
-        List<Result<Product>> result = collection.find (
+        List<DocumentResult<Product>> result = collection.find (
                 SelectQuery.builder()
                         .orderByAnn(descEmbedding.vector())
                         .includeSimilarity()

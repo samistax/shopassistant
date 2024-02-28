@@ -31,6 +31,7 @@ import com.vaadin.flow.theme.lumo.LumoUtility.TextColor;
 import com.vaadin.flow.theme.lumo.LumoUtility.Width;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.vaadin.lineawesome.LineAwesomeIcon;
 
 
 public class ProductsViewCard extends ListItem {
@@ -51,6 +52,14 @@ public class ProductsViewCard extends ListItem {
     public static class AssistClickEvent extends ComponentEvent<ProductsViewCard> {
         private String productId = new String("");
         public AssistClickEvent(ProductsViewCard source) {
+            super(source, false);
+        }
+        public String getProductId(){return this.productId;}
+        public void setProductId(String productId){this.productId = productId;}
+    }
+    public static class DesignClickEvent extends ComponentEvent<ProductsViewCard> {
+        private String productId = new String("");
+        public DesignClickEvent(ProductsViewCard source) {
             super(source, false);
         }
         public String getProductId(){return this.productId;}
@@ -137,20 +146,32 @@ public class ProductsViewCard extends ListItem {
         assistBtn.addClickListener(event -> {
             VaadinSession.getCurrent().setAttribute(Product.class, p);
             AssistClickEvent ace = new AssistClickEvent(this);
-            ace.setProductId(p.getId());
+            ace.setProductId(p.getPid());
             fireEvent(ace);
+        });
+        Button designBtn = new Button(LineAwesomeIcon.SHOE_PRINTS_SOLID.create());
+        designBtn.setTooltipText("Click to Design your onw shoe");
+        designBtn.addClickListener(event -> {
+            VaadinSession.getCurrent().setAttribute(Product.class, p);
+            DesignClickEvent dce = new DesignClickEvent(this);
+            dce.setProductId(p.getPid());
+            fireEvent(dce);
         });
 
         HorizontalLayout footer = new HorizontalLayout();
         footer.setAlignItems(FlexComponent.Alignment.BASELINE);
         footer.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
-        footer.add(badge, price, buyBtn, assistBtn );
+        footer.add(badge, price, buyBtn, assistBtn, designBtn );
 
         add( div, footer,subtitle,  header,description );
     }
     public Registration addAssistClickListener(
             ComponentEventListener<AssistClickEvent> listener) {
         return addListener(AssistClickEvent.class, listener);
+    }
+    public Registration addDesignClickListener(
+            ComponentEventListener<DesignClickEvent> listener) {
+        return addListener(DesignClickEvent.class, listener);
     }
     public Registration addSimilarityClickListener(
             ComponentEventListener<SimilarityClickEvent> listener) {

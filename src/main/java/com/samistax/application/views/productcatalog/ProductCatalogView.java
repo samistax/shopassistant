@@ -1,8 +1,14 @@
 package com.samistax.application.views.productcatalog;
 
-import com.samistax.application.data.SamplePerson;
+import com.dtsx.astra.sdk.AstraDBCollection;
+import com.dtsx.astra.sdk.utils.JsonUtils;
+import com.samistax.application.Application;
+import com.samistax.application.data.astra.json.Product;
+import com.samistax.application.services.AstraService;
 import com.samistax.application.services.SamplePersonService;
 import com.samistax.application.views.MainLayout;
+import com.samistax.application.views.products.ProductDataProvider;
+import com.samistax.application.views.products.ProductFilter;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.button.Button;
@@ -13,7 +19,9 @@ import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.dependency.Uses;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
+import com.vaadin.flow.component.grid.HeaderRow;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeLabel;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
@@ -21,18 +29,27 @@ import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.textfield.TextFieldVariant;
+import com.vaadin.flow.data.provider.ConfigurableFilterDataProvider;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.spring.data.VaadinSpringDataHelpers;
 import com.vaadin.flow.theme.lumo.LumoUtility;
+import io.stargate.sdk.core.domain.Page;
+import io.stargate.sdk.data.domain.odm.DocumentResult;
+import io.stargate.sdk.data.domain.query.Filter;
+import io.stargate.sdk.data.domain.query.SelectQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.data.domain.PageRequest;
+
+import java.lang.reflect.Field;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
 import org.springframework.data.jpa.domain.Specification;
 
 @PageTitle("Product Catalog")
@@ -40,18 +57,26 @@ import org.springframework.data.jpa.domain.Specification;
 @Uses(Icon.class)
 public class ProductCatalogView extends Div {
 
-    private Grid<SamplePerson> grid;
+    //private Grid<SamplePerson> grid;
+    private Grid<Product> grid;
+    private AstraDBCollection collection;
+    private SelectQuery query;
 
     private Filters filters;
+    private static Map<String, Object> filterMap = new HashMap<>();
+
     private final SamplePersonService samplePersonService;
 
-    public ProductCatalogView(SamplePersonService SamplePersonService) {
+    public ProductCatalogView(SamplePersonService SamplePersonService, AstraService astraService) {
         this.samplePersonService = SamplePersonService;
+        if ( astraService != null ) {
+            this.collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
+        }
         setSizeFull();
         addClassNames("product-catalog-view");
 
         filters = new Filters(() -> refreshGrid());
-        VerticalLayout layout = new VerticalLayout(createMobileFilters(), filters, createGrid());
+        VerticalLayout layout = new VerticalLayout(createMobileFilters(), /*filters,*/ createGrid());
         layout.setSizeFull();
         layout.setPadding(false);
         layout.setSpacing(false);
@@ -82,7 +107,7 @@ public class ProductCatalogView extends Div {
         return mobileFilters;
     }
 
-    public static class Filters extends Div implements Specification<SamplePerson> {
+    public static class Filters extends Div implements Specification<Product> {
 
         private final TextField name = new TextField("Name");
         private final TextField phone = new TextField("Phone");
@@ -90,8 +115,21 @@ public class ProductCatalogView extends Div {
         private final DatePicker endDate = new DatePicker();
         private final MultiSelectComboBox<String> occupations = new MultiSelectComboBox<>("Occupation");
         private final CheckboxGroup<String> roles = new CheckboxGroup<>("Role");
+        private final HashMap<String, TextField> filters = new HashMap<>();
 
         public Filters(Runnable onSearch) {
+
+            List<Field> names = Arrays.stream(Product.class.getDeclaredFields()).toList();
+            names.forEach(field -> {
+                String fname = field.getName();
+                TextField tf = new TextField(fname);
+                if ( filterMap.containsKey(fname) ) {
+                    tf.setValue(filterMap.get(fname).toString());
+                }
+                tf.setId(fname);
+                filters.put(fname, tf);
+                add(tf);
+            });
 
             setWidthFull();
             addClassName("filter-layout");
@@ -114,6 +152,7 @@ public class ProductCatalogView extends Div {
                 endDate.clear();
                 occupations.clear();
                 roles.clear();
+                filterMap.clear();
                 onSearch.run();
             });
             Button searchBtn = new Button("Search");
@@ -124,7 +163,8 @@ public class ProductCatalogView extends Div {
             actions.addClassName(LumoUtility.Gap.SMALL);
             actions.addClassName("actions");
 
-            add(name, phone, createDateRangeFilter(), occupations, roles, actions);
+            //add(name, phone, createDateRangeFilter(), occupations, roles, actions);
+            add(actions);
         }
 
         private Component createDateRangeFilter() {
@@ -144,7 +184,7 @@ public class ProductCatalogView extends Div {
         }
 
         @Override
-        public Predicate toPredicate(Root<SamplePerson> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
+        public Predicate toPredicate(Root<Product> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
             List<Predicate> predicates = new ArrayList<>();
 
             if (!name.isEmpty()) {
@@ -217,25 +257,139 @@ public class ProductCatalogView extends Div {
     }
 
     private Component createGrid() {
-        grid = new Grid<>(SamplePerson.class, false);
-        grid.addColumn("firstName").setAutoWidth(true);
-        grid.addColumn("lastName").setAutoWidth(true);
-        grid.addColumn("email").setAutoWidth(true);
-        grid.addColumn("phone").setAutoWidth(true);
-        grid.addColumn("dateOfBirth").setAutoWidth(true);
-        grid.addColumn("occupation").setAutoWidth(true);
-        grid.addColumn("role").setAutoWidth(true);
+
+
+        ProductDataProvider dataProvider = new ProductDataProvider(collection);
+        grid = new Grid<Product>();
+        grid.setPageSize(20);
+        grid.setDataProvider(dataProvider);
+        grid.addThemeVariants(GridVariant.LUMO_WRAP_CELL_CONTENT);
+
+
+        Grid.Column idCol = grid.addColumn(r -> r.getPid() == null ? "" : r.getPid())
+                .setHeader("pid").setKey("pid").setAutoWidth(true).setSortable(true);
+        Grid.Column descriptionCol = grid.addColumn(r -> r.getDescription() == null ? "" : r.getDescription())
+                .setHeader("Description").setKey("description").setWidth("40%").setSortable(true);
+        Grid.Column nameCol = grid.addColumn(r -> r.getName() == null ? "" : r.getName())
+                .setHeader("Name").setKey("name").setAutoWidth(true).setSortable(true);
+        Grid.Column brandCol = grid.addColumn(r -> r.getBrand() == null ? "" : r.getBrand())
+                .setHeader("Brand").setKey("brand").setAutoWidth(true).setSortable(true);
+        Grid.Column categoryCol = grid.addColumn(r -> r.getCategory() == null ? "" : r.getCategory())
+                .setHeader("Category").setKey("category").setAutoWidth(true).setSortable(true);
+        Grid.Column colorCol = grid.addColumn(r -> r.getColor() == null ? "" : r.getColor())
+                .setHeader("Color").setKey("color").setAutoWidth(true).setSortable(true);
+        Grid.Column priceCol = grid.addColumn(r -> r.getWholesale_price() == null ? "" : r.getWholesale_price())
+                .setHeader("Price").setKey("wholesale_price").setAutoWidth(true).setSortable(true);
+        Grid.Column imageCol = grid.addColumn(r -> r.getImage_url() == null ? "" : r.getImage_url())
+                .setHeader("Image").setKey("image_url").setAutoWidth(true).setSortable(false);
+
+          /*
+        Grid.Column idCol = grid.addColumn(r -> r.getData().getId() == null ? "" : r.getData().getId())
+                .setHeader("pid").setAutoWidth(true).setSortable(true);
+        idCol.getHeaderComponent().add
+        grid.addColumn(r -> r.getData().getDescription() == null ? "" : r.getData().getDescription())
+                .setHeader("Description").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getName() == null ? "" : r.getData().getName())
+                .setHeader("Name").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getBrand() == null ? "" : r.getData().getBrand())
+                .setHeader("Brand").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getCategory() == null ? "" : r.getData().getCategory())
+                .setHeader("Category").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getColor() == null ? "" : r.getData().getColor())
+                .setHeader("Color").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getWholesale_price() == null ? "" : r.getData().getWholesale_price())
+                .setHeader("Price").setAutoWidth(true).setSortable(true);
+        grid.addColumn(r -> r.getData().getImage_url() == null ? "" : r.getData().getImage_url())
+                .setHeader("Image").setAutoWidth(true).setSortable(false);
+
+
 
         grid.setItems(query -> samplePersonService.list(
                 PageRequest.of(query.getPage(), query.getPageSize(), VaadinSpringDataHelpers.toSpringDataSort(query)),
                 filters).stream());
+
+         */
+        HeaderRow headerRow = grid.appendHeaderRow();
+        ProductFilter productFilter = new ProductFilter(grid.getLazyDataView());
+
+        ConfigurableFilterDataProvider<Product, Void, ProductFilter> filterDataProvider = dataProvider
+                .withConfigurableFilter();
+        filterDataProvider.setFilter(productFilter);
+
+        //Product prodSchema = new Product();
+        //Field[] fields = prodSchema.getClass().getDeclaredFields();
+
+        grid.getColumns().forEach(col-> {
+            headerRow.getCell(col).setComponent(createFilterHeader(col.getKey(),productFilter, productFilter::setPid));
+        } );
+/*
+        headerRow.getCell(idCol).setComponent(createFilterHeader("pid",productFilter, productFilter::setId));
+        headerRow.getCell(nameCol).setComponent(createFilterHeader("Name",productFilter, productFilter::setName));
+        headerRow.getCell(colorCol).setComponent(createFilterHeader("Color",productFilter, productFilter::setColor));
+        headerRow.getCell(descriptionCol).setComponent(createFilterHeader("Description",productFilter, productFilter::setDescription));
+        headerRow.getCell(categoryCol).setComponent(createFilterHeader("Category",productFilter, productFilter::setCategory));
+        headerRow.getCell(brandCol).setComponent(createFilterHeader("Brand",productFilter, productFilter::setBrand));
+        headerRow.getCell(priceCol).setComponent(createFilterHeader("Price",productFilter, productFilter::setWholesale_price));
+ */
+        grid.setItems(filterDataProvider);
+
+
+        //refreshGrid();
+
         grid.addThemeVariants(GridVariant.LUMO_NO_BORDER);
         grid.addClassNames(LumoUtility.Border.TOP, LumoUtility.BorderColor.CONTRAST_10);
 
         return grid;
     }
 
+    private static Component createFilterHeader(String labelText,
+                                                ProductFilter productFilter,
+                                                Consumer<String> filterChangeConsumer) {
+        NativeLabel label = new NativeLabel(labelText);
+        label.getStyle().set("padding-top", "var(--lumo-space-m)")
+                .set("font-size", "var(--lumo-font-size-xs)");
+        TextField textField = new TextField();
+        textField.setValueChangeMode(ValueChangeMode.EAGER);
+        textField.setClearButtonVisible(true);
+        textField.addThemeVariants(TextFieldVariant.LUMO_SMALL);
+        textField.setWidthFull();
+
+        textField.getStyle().set("max-width", "100%");
+        textField.addValueChangeListener(e -> {
+                //filterChangeConsumer.accept(e.getValue());
+                if ( e.getValue().isBlank() ) {
+                    productFilter.remove(labelText);
+                } else {
+                    productFilter.put(labelText, e.getValue());
+                }
+                productFilter.refreshDataView();
+
+                //productFilter.setSearchTerm(e.getValue());
+                //filterDataProvider.setFilter(productFilter);
+        });
+
+        //VerticalLayout layout = new VerticalLayout(label, textField);
+        VerticalLayout layout = new VerticalLayout(textField);
+        layout.getThemeList().clear();
+        layout.getThemeList().add("spacing-xs");
+
+        return layout;
+    }
+    private List<Product> queryProducts(Map<String, Object> filters) {
+        Filter filterProductExists = new Filter().where("pid").exists();
+        // TODO: Convert UI filters to Data API query filters.
+        SelectQuery query = SelectQuery.builder()
+                .filter(filterProductExists)
+                .build();
+        Page<DocumentResult<Product>> page = collection.findPage(query, Product.class);
+        List<DocumentResult<Product>> results = page.getResults();
+        List<Product> prods = new ArrayList<>();
+        results.forEach(r-> prods.add(r.getData()));
+        return prods;
+    }
+
     private void refreshGrid() {
+        //grid.setItems(queryProducts(filterMap));
         grid.getDataProvider().refreshAll();
     }
 

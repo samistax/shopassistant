@@ -1,9 +1,6 @@
 package com.samistax.application.ai;
 import com.samistax.application.data.astra.json.Product;
-import dev.langchain4j.service.SystemMessage;
-import dev.langchain4j.service.TokenStream;
-import dev.langchain4j.service.UserMessage;
-import dev.langchain4j.service.V;
+import dev.langchain4j.service.*;
 
 public interface ShopAssistantAgent {
 
@@ -13,5 +10,8 @@ public interface ShopAssistantAgent {
             "id, name and description.",
             "You can use tools to find more information of the {{product}} and search for products in the store.",
     })
-    TokenStream chat(@UserMessage String message, @V("product") Product product);
+    TokenStream productChat(@UserMessage String message, @V("product") Product product);
+
+    TokenStream chat(@MemoryId String userId, @UserMessage String message);
+
 }

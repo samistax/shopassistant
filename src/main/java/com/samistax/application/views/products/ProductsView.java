@@ -2,7 +2,7 @@ package com.samistax.application.views.products;
 
 import com.dtsx.astra.sdk.AstraDBCollection;
 import com.samistax.application.Application;
-import com.samistax.application.components.ColorPicker;
+import com.samistax.application.ai.ShopAssistantAgent;
 import com.samistax.application.data.astra.json.Product;
 import com.samistax.application.services.AstraService;
 import com.samistax.application.services.ChatService;
@@ -23,15 +23,17 @@ import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
-import com.vaadin.flow.component.shared.ThemeVariant;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
+import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.dom.Style;
-import com.vaadin.flow.dom.ThemeList;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.InputStreamFactory;
+import com.vaadin.flow.server.StreamResource;
 import com.vaadin.flow.server.VaadinSession;
-import com.vaadin.flow.theme.lumo.Lumo;
 import com.vaadin.flow.theme.lumo.LumoUtility;
 import com.vaadin.flow.theme.lumo.LumoUtility.AlignItems;
 import com.vaadin.flow.theme.lumo.LumoUtility.Display;
@@ -40,24 +42,26 @@ import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
 import com.vaadin.flow.theme.lumo.LumoUtility.JustifyContent;
 import com.vaadin.flow.theme.lumo.LumoUtility.ListStyleType;
 import com.vaadin.flow.theme.lumo.LumoUtility.Margin;
-import com.vaadin.flow.theme.lumo.LumoUtility.MaxWidth;
 import com.vaadin.flow.theme.lumo.LumoUtility.Padding;
 import com.vaadin.flow.theme.lumo.LumoUtility.TextColor;
-import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.OnnxEmbeddingModel;
-import dev.langchain4j.model.embedding.BertTokenizer;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiImageModel;
+import dev.langchain4j.model.output.Response;
 import dev.langchain4j.service.TokenStream;
+import elemental.json.JsonValue;
 import io.stargate.sdk.core.domain.Page;
-import io.stargate.sdk.json.domain.JsonDocument;
-import io.stargate.sdk.json.domain.SelectQuery;
-import io.stargate.sdk.json.domain.odm.Result;
+import io.stargate.sdk.data.domain.odm.DocumentResult;
+import io.stargate.sdk.data.domain.query.Filter;
+import io.stargate.sdk.data.domain.query.SelectQuery;
 
-import java.net.URL;
+
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @PageTitle("Shop")
 @Route(value = "shop", layout = MainLayout.class)
@@ -66,6 +70,7 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
     private OrderedList imageContainer;
     private AstraService astraService;
     private ChatService chatService;
+    private ShopAssistantAgent agent;
 
     private SelectQuery productQuery;
 
@@ -78,28 +83,42 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
     private String selectedModel = "AllMiniLmL6V2";
     private List<Product> similarProducts = new ArrayList<>();
 
-    private TextField promptUser = new TextField("Ask about the product");
+    private TextField promptInput = new TextField("Ask about the product");
     private Span promptResponse = new Span();
     private boolean chatCompletionInProgress = false;
-    public ProductsView(AstraService astraService,ChatService chatService) {
+    private Filter filterProductExists = new Filter().where("pid").exists();
+
+
+    // File upload fields
+    private File file;
+    private String originalFileName;
+    private String mimeType;
+    private Div output = new Div(new Text("(no image file uploaded yet)"));
+    private TextArea designInput = new TextArea("Tell us how to make this perfect shoe");
+    private OpenAiImageModel imageModel;
+
+
+    public ProductsView(AstraService astraService, ChatService chatService, ShopAssistantAgent agent, OpenAiImageModel imageModel) {
 
         this.astraService = astraService;
         this.chatService = chatService;
+        this.agent = agent;
+        this.imageModel = imageModel;
 
         this.collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
         this.productQuery = SelectQuery.builder()
-                .where("id").exists()
+                .filter(filterProductExists)
                 .includeSimilarity()
                 .build();
 
         // Create UI with personalised welcome text
         this.addToPrimary(constructPrimaryUI());
         // Create UI for Assistant
-        this.addToSecondary(constructSecondaryUI());
+        this.addToSecondary(constructSecondaryUI(false));
         this.getSecondaryComponent().setVisible(false);
 
         // You can map the output as Result<T> using either a Java pojo or mapper
-        Page<Result<Product>> page = collection.findPage(productQuery, Product.class);
+        Page<DocumentResult<Product>> page = collection.findPage(productQuery, Product.class);
         if (! page.isEmpty()) {
             // Store page state for retrieving next page.
             page.getPageState().ifPresent(pageState -> pageStates.add(pageState));
@@ -120,17 +139,17 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
             // Remove previous state
             int lastItemIdx = pageStates.size()-1;
             pageStates.remove(lastItemIdx);
-            Page<Result<Product>> prevPage = null;
+            Page<DocumentResult<Product>> prevPage = null;
             if ( (pageStates.size()-1)  > 0) {
                 prevPage = collection.findPage(SelectQuery.builder()
-                        .where("id").exists()
+                        .filter(filterProductExists)
                         .includeSimilarity()
                         .withPagingState(pageStates.get(lastItemIdx-2))
                         .build(), Product.class);
             } else{
                 // Returned to first page
                 prevPage = collection.findPage(SelectQuery.builder()
-                        .where("id").exists()
+                        .filter(filterProductExists)
                         .includeSimilarity()
                         .build(), Product.class);
                 prevPageBtn.setEnabled(false);
@@ -143,19 +162,20 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
         });
 
         nextPageBtn.addClickListener(e-> {
-
-            Page<Result<Product>> nextPage = collection.findPage(SelectQuery.builder()
-                    .where("id").exists()
-                    .includeSimilarity()
+            Page<DocumentResult<Product>> nextPage = collection.findPage(SelectQuery.builder()
+                    .filter(filterProductExists)
                     .withPagingState(pageStates.get(pageStates.size()-1))
+                    //.withSkip(selectedPage)
+                    .includeSimilarity()
                     .build(), Product.class);
-
+            nextPageBtn.setEnabled(false);
             nextPage.getPageState().ifPresent(pageState -> {
                 pageStates.add(pageState);
-                prevPageBtn.setEnabled(true);
+                nextPageBtn.setEnabled(true);
             });
             // Enable previous button to return to initial view
-             selectedPage = selectedPage + 1;
+            prevPageBtn.setEnabled(true);
+            selectedPage = selectedPage + 1;
             currentPageTitle.setText("Page " + selectedPage);
 
             imageContainer.removeAll();
@@ -171,19 +191,27 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
         return layout;
     }
 
-    private void addProductsToContainer(Page<Result<Product>> page){
+    private void addProductsToContainer(Page<DocumentResult<Product>> page){
         // Remove old items
         imageContainer.removeAll();
         similarProducts.clear();
-        promptUser.clear();
+        promptInput.clear();
 
         page.getResults().stream().forEach(p -> {
+
             Product prod = p.getData();
             ProductsViewCard card = new ProductsViewCard(prod, p.getSimilarity(), p.getVector());
             card.addAssistClickListener(e-> {
                 System.out.println("Assist button clicked for product" + e.getProductId());
                 similarProducts.clear();
-                this.addToSecondary(constructSecondaryUI());
+                this.addToSecondary(constructSecondaryUI(false));
+                this.getSecondaryComponent().setVisible(true);
+                this.getSecondaryComponent().scrollIntoView();
+            });
+            card.addDesignClickListener(e-> {
+                System.out.println("Design button clicked for product" + e.getProductId());
+                similarProducts.clear();
+                this.addToSecondary(constructSecondaryUI(true));
                 this.getSecondaryComponent().setVisible(true);
                 this.getSecondaryComponent().scrollIntoView();
             });
@@ -248,18 +276,18 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
             }
             if ( orderByDirection == 0  ) {
                 productQuery = SelectQuery.builder()
-                        .where("id").exists()
+                        .filter(filterProductExists)
                         .includeSimilarity()
                         .build();
             } else {
                 productQuery = SelectQuery.builder()
-                        .where("id").exists()
+                        .filter(filterProductExists)
                         .includeSimilarity()
                         .orderBy("wholesale_price", orderByDirection)
                         .build();
             }
 
-            Page<Result<Product>> page = collection.findPage(productQuery, Product.class);
+            Page<DocumentResult<Product>> page = collection.findPage(productQuery, Product.class);
             if (! page.isEmpty()) {
                 // Store page state for retrieving next page.
                 page.getPageState().ifPresent(pageState -> {
@@ -292,10 +320,9 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
         layout.add(headerContainer, description,  sortBy, createPaginationPanel(), imageContainer);
         return layout;
     }
-    private Component constructSecondaryUI() {
+    private Component constructSecondaryUI(boolean designerMode) {
 
         VerticalLayout layout = new VerticalLayout();
-
 
         HorizontalLayout header = new HorizontalLayout();
         Button closeBtn = new Button(VaadinIcon.ARROW_FORWARD.create());
@@ -334,25 +361,24 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
 
         FlexLayout similarProductsPanel = new FlexLayout();
         similarProducts.forEach(p -> {
-            Image img = new Image(p.getImage_url(), p.getId() + " image");
+            Image img = new Image(p.getImage_url(), p.getPid() + " image");
             img.setWidth(60, Unit.PIXELS);
             img.addClickListener(e -> {
                 VaadinSession.getCurrent().setAttribute(Product.class, p);
                 //selectedProduct = p;
-                this.addToSecondary(constructSecondaryUI());
+                this.addToSecondary(constructSecondaryUI(designerMode));
             });
             similarProductsPanel.add(img);
         });
 
         layout.add(similarProductsPanel);
-
         Button findBtn = new Button(VaadinIcon.SEARCH.create());
         findBtn.setText("Find Similar Products");
         findBtn.addClickListener(e-> {
 
             EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
             Embedding descEmbedding = embeddingModel.embed(selectedProduct.getDescription()).content();
-            List<Result<Product>> annProducts = findSimilarProduct(descEmbedding.vector(), 5);
+            List<DocumentResult<Product>> annProducts = findSimilarProduct(descEmbedding.vector(), 5);
             if ( annProducts.size() > 0 ) {
                 // Update new similar items
                 this.similarProducts.clear();
@@ -361,36 +387,44 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
                         similarProducts.add(r.getData());
                     }
                 });
-                this.addToSecondary(constructSecondaryUI());
+                this.addToSecondary(constructSecondaryUI(designerMode));
             }
         });
         layout.add(findBtn);
-
-        Button button = new Button(VaadinIcon.PAPERPLANE.create());
         HorizontalLayout inputLayout = new HorizontalLayout();
-        promptUser.setWidth(80, Unit.PERCENTAGE);
-        button.setWidth(20, Unit.PERCENTAGE);
 
-        promptUser.addKeyPressListener(Key.ENTER, event -> submitPrompt());
-        button.addClickListener(event -> submitPrompt());
-        inputLayout.add(promptUser, button);
+        if ( designerMode ) {
+            designInput.setValueChangeMode(ValueChangeMode.EAGER);
+            designInput.setWidthFull();
+            designInput.addKeyPressListener(Key.ENTER, event -> submitDesignPrompt());
+            inputLayout.add(designInput);
+        } else {
+            Button button = new Button(VaadinIcon.PAPERPLANE.create());
+            //promptInput.setLabel("Asks about the product");
+            promptInput.setWidth(80, Unit.PERCENTAGE);
+            button.setWidth(20, Unit.PERCENTAGE);
+            promptInput.addKeyPressListener(Key.ENTER, event -> submitPrompt());
+            button.addClickListener(event -> submitPrompt());
+            inputLayout.add(promptInput, button);
+        }
         inputLayout.setAlignItems(FlexComponent.Alignment.BASELINE);
         inputLayout.setWidthFull();
 
         promptResponse.setWidthFull();
         layout.add(inputLayout, promptResponse);
+        //layout.add(UploadImageToFile());
 
         layout.setWidth(40,Unit.PERCENTAGE);
 
         return layout;
     }
-    public List<Result<Product>> findSimilarProduct(float[] embedding, int limit) {
+    public List<DocumentResult<Product>> findSimilarProduct(float[] embedding, int limit) {
         if ( limit > 20 || limit < 0 ) {
             limit = 20;
         }
         AstraDBCollection collection = astraService.getCollection(Application.ASTRA_PRODUCT_TABLE);
         // Order the results by similarity
-        List<Result<Product>> result = collection.find (
+        List<DocumentResult<Product>> result = collection.find (
                 SelectQuery.builder()
                         .orderByAnn(embedding)
                         .includeSimilarity()
@@ -401,36 +435,76 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
     private void submitPrompt(){
 
         UI ui = UI.getCurrent();
-        if ( ! chatCompletionInProgress ) {
-            chatCompletionInProgress = true;
-            promptUser.setPlaceholder(promptUser.getValue());
 
-            TokenStream tokenStream = chatService.chatShopAssistant(promptUser.getValue(), selectedProduct);
-            promptResponse.setText("");
+        try {
+            if (!chatCompletionInProgress) {
+                chatCompletionInProgress = true;
+                promptResponse.setText("");
 
-            // UI ui = UI.getCurrent();
-            tokenStream.onNext(chunk -> {
+                promptInput.setPlaceholder(promptInput.getValue());
+                TokenStream tokenStream = agent.productChat(promptInput.getValue(), selectedProduct);
+                //TokenStream tokenStream = chatService.chatShopAssistant(promptUser.getValue(), selectedProduct);
+                // UI ui = UI.getCurrent();
+                tokenStream.onNext(chunk -> {
 
-                ui.access(() -> {
-                    promptResponse.setText(promptResponse.getText() + chunk);
+                            ui.access(() -> {
+                                promptResponse.setText(promptResponse.getText() + chunk);
 
-                    // Access the underlying vaadin-message-list element
-                    ScrollOptions options = new ScrollOptions();
-                    options.setBlock(ScrollOptions.Alignment.END);
-                    options.setBehavior(ScrollOptions.Behavior.AUTO);
-                    promptResponse.scrollIntoView(options);
-                });
+                                // Access the underlying vaadin-message-list element
+                                ScrollOptions options = new ScrollOptions();
+                                options.setBlock(ScrollOptions.Alignment.END);
+                                options.setBehavior(ScrollOptions.Behavior.AUTO);
+                                promptResponse.scrollIntoView(options);
+                            });
 
-            })
-            .onComplete(c -> {
-                chatCompletionInProgress = false;
-            })
-            .onError(Throwable::printStackTrace)
-            .start();
-
-            promptUser.clear();
+                        })
+                        .onComplete(c -> {
+                            chatCompletionInProgress = false;
+                        })
+                        .onError(Throwable::printStackTrace)
+                        .start();
+                promptInput.clear();
+            }
+        } catch (Exception ex) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "submitPrompt threw Exception: " , ex);
         }
     }
+    private void submitDesignPrompt(){
+
+        String input = designInput.getValue();
+        UI ui = UI.getCurrent();
+
+        try {
+
+            if (!chatCompletionInProgress) {
+                chatCompletionInProgress = true;
+                promptResponse.setText(input);
+
+                //dev.langchain4j.data.image.Image referenceImage = dev.langchain4j.data.image.Image.builder().url(selectedProduct.getImage_url()).build();
+                //Response<dev.langchain4j.data.image.Image> response = imageModel.edit(referenceImage, input);
+                Response<dev.langchain4j.data.image.Image> response = imageModel.generate(input);
+
+                // create a buffered image
+                Image responseImage = new Image();
+                if ( response.content() != null ) {
+                    responseImage.setSrc(response.content().url().toString());
+                } else {
+                    promptResponse.setText("Failed to create an image. Please try to revise your input");
+                }
+                //this.promptResponse.add(convertToImage(imageBytes));
+                this.promptResponse.add(responseImage);
+
+                chatCompletionInProgress = false;
+                promptInput.clear();
+            }
+        } catch (Exception ex) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "submitDesignPrompt threw Exception: " , ex);
+            promptResponse.setText("Error: " + ex.getMessage());
+            chatCompletionInProgress = false;
+        }
+    }
+
+
     private void openSettingsDialog() {
         // Create the dialog
         Dialog settingsDialog = new Dialog();
@@ -438,7 +512,7 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
         settingsDialog.setWidth(50, Unit.PERCENTAGE);
         VerticalLayout dialogContent = new VerticalLayout();
 
-        ComboBox<String> modelSelect = new ComboBox<>("Embedding Model");
+        ComboBox<String> modelSelect = new ComboBox<>("Text Embedding Model");
         modelSelect.setItems("AllMiniLmL6V2","OpenAi","Onnx","BertTokenizer");
         modelSelect.setValue(selectedModel);
 
@@ -462,4 +536,77 @@ public class ProductsView extends SplitLayout implements HasComponents, HasStyle
         // Show the dialog
         settingsDialog.open();
     }
+
+    // This is called from JavaScript event listener when file is removed from upload component
+    @ClientCallable
+    public void fileRemove(JsonValue event) {
+        /*output.getChildren()
+                .filter(component -> event.toJson().contains(
+                        (String) ComponentUtil.getData(component, "name")))
+                .findFirst().ifPresent(match -> output.remove(match));
+         */
+        output.removeAll();
+    }
+    private VerticalLayout UploadImageToFile() {
+        VerticalLayout layout = new VerticalLayout();
+        Upload upload = new Upload(this::receiveUpload);
+        upload.setMaxFiles(1);
+        upload.setDropLabel(new Span("Search with image"));
+
+        layout.add(output, upload);
+
+        // Configure upload component
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/gif");
+        upload.addSucceededListener(event -> {
+            Image searchImage = new Image(new StreamResource(this.originalFileName,this::loadFile),"Uploaded image");
+            searchImage.setWidth(200,Unit.PIXELS);
+            output.removeAll();
+            output.add(searchImage);
+        });
+        upload.addFileRejectedListener(event -> {
+            Notification.show(event.getErrorMessage());
+
+        });
+        upload.getElement().executeJs(
+                "this.addEventListener('file-remove', (e) => $0.$server.fileRemove(e.detail.file.name));",
+                getElement());
+
+        upload.addFailedListener(event -> {
+            output.removeAll();
+            output.add(new Text("Upload failed: " + event.getReason()));
+        });
+        return layout;
+    }
+
+    /** Load a file from local filesystem.
+     *
+     */
+    public InputStream loadFile() {
+        try {
+            return new FileInputStream(file);
+        } catch (FileNotFoundException e) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Failed to create InputStream for: '" + this.file.getAbsolutePath(), e);
+        }
+        return null;
+    }
+
+    /** Receive a uploaded file to a file.
+     */
+    public OutputStream receiveUpload(String originalFileName, String MIMEType) {
+        this.originalFileName = originalFileName;
+        this.mimeType = MIMEType;
+        try {
+            // Create a temporary file for example, you can provide your file here.
+            this.file = File.createTempFile("prefix-", "-suffix");
+            file.deleteOnExit();
+            return new FileOutputStream(file);
+        } catch (FileNotFoundException e) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Failed to create InputStream for: '" + this.file.getAbsolutePath(), e);
+        } catch (IOException e) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Failed to create InputStream for: '" + this.file.getAbsolutePath() + "'", e);
+        }
+
+        return null;
+    }
+
 }

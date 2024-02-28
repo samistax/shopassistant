@@ -1,9 +1,9 @@
 package com.samistax.application.views.assistant;
 
+import com.samistax.application.ai.ShopAssistantAgent;
 import com.samistax.application.data.astra.ChatMsg;
 import com.samistax.application.services.ChatMessagePersister;
 import com.samistax.application.services.ChatMsgService;
-import com.samistax.application.services.ChatService;
 import com.samistax.application.views.MainLayout;
 import com.samistax.application.views.feed.Person;
 import com.vaadin.collaborationengine.*;
@@ -23,7 +23,6 @@ import com.vaadin.flow.component.page.Page;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.tabs.Tabs.Orientation;
-import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
@@ -46,7 +45,6 @@ import java.util.List;
 
 @PageTitle("Assistant")
 @Route(value = "assistant", layout = MainLayout.class)
-//@RouteAlias(value = "", layout = MainLayout.class)
 public class AssistantView extends HorizontalLayout {
 
     public static class ChatTab extends Tab {
@@ -110,18 +108,19 @@ public class AssistantView extends HorizontalLayout {
     private ChatInfo currentChat = chats[0];
     private Tabs tabs;
     private CollaborationMessageList messageList;
-    private ChatService chatService;
+    //private ChatService chatService;
+    private ShopAssistantAgent assistant;
     private ChatMsgService chatMsgService;
     private MessageManager messageManager;
     private UserInfo AI_USER = new UserInfo("0", "AI Assistant");
 
     private boolean callCompletion = false;
 
-    public AssistantView(ChatService chatService, ChatMsgService chatMsgService, ChatMessagePersister messagePersister ) {
+    public AssistantView(ShopAssistantAgent assistant, ChatMsgService chatMsgService, ChatMessagePersister messagePersister ) {
         addClassNames("assistant-view", Width.FULL, Display.FLEX, Flex.AUTO);
         setSpacing(false);
 
-        this.chatService = chatService;
+        this.assistant = assistant;
         this.chatMsgService = chatMsgService;
 
         // UserInfo is used by Collaboration Engine and is used to share details
@@ -155,7 +154,7 @@ public class AssistantView extends HorizontalLayout {
                 if ( callCompletion ) {
                     Thread workerThread = new Thread(() -> {
                         this.getUI().ifPresent(ui -> ui.access(() -> {
-                            ui.accessSynchronously(() -> callAsynchChatCompletion(messagePersister, currentChat.getCollaborationTopic(), AI_USER, context.getMessage().getText()));
+                            ui.accessSynchronously(() -> callAsynchChatCompletion(messagePersister, currentChat.getCollaborationTopic(), currentUserId, context.getMessage().getText()));
                         }));
                     });
                     workerThread.start();
@@ -242,11 +241,9 @@ public class AssistantView extends HorizontalLayout {
                 try {
                      CollaborationList list = connection.getNamedList("com.vaadin.collaborationengine.MessageManager");
                      list.getKeys().forEach(key -> {
-
                              System.out.println("Key: " + key);
                              //list.remove(key);
                              ListOperationResult<Boolean> result = list.apply(ListOperation.delete(key));
-
                      });
                      List<CollaborationMessage> messages = list.getItems(CollaborationMessage.class);
                    System.out.println("messages: " + messages);
@@ -264,10 +261,7 @@ public class AssistantView extends HorizontalLayout {
             // Start with new manager with cleared topic message history
             messageManager = new MessageManager(this, messageManager.getLocalUser(), currentChat.getCollaborationTopic(), messagePersister);
 
-
-
         });
-
 
         side.add(header, tabs, clearChatBtn);
 
@@ -286,7 +280,6 @@ public class AssistantView extends HorizontalLayout {
             messageList.setTopic(currentChat.getCollaborationTopic());
             messageManager = currentChat.getMm();
         });
-
 
     }
 
@@ -315,12 +308,10 @@ public class AssistantView extends HorizontalLayout {
     private void setMobile(boolean mobile) {
         tabs.setOrientation(mobile ? Orientation.HORIZONTAL : Orientation.VERTICAL);
     }
-    private void callAsynchChatCompletion(ChatMessagePersister persister , String topicId, UserInfo user, String msg) {
+    private void callAsynchChatCompletion(ChatMessagePersister persister , String topicId, String userId, String msg) {
 
         // Use message list in UI component instead for better performance.
         CollaborationMessage botMsg = new CollaborationMessage(AI_USER, "", Instant.now());
-       // MessageManager botMessageManager = new MessageManager(this, AI_USER, topicId, persister);
-
         UI ui = UI.getCurrent();
         ui.access(() -> {
             List<MessageListItem> itemsWithResponse = new ArrayList<MessageListItem>();
@@ -332,7 +323,8 @@ public class AssistantView extends HorizontalLayout {
             messageList.getContent().setItems(itemsWithResponse);
         });
 
-        TokenStream tokenStream = chatService.chatTokenStream(msg);
+        //TokenStream tokenStream = chatService.chatTokenStream(userId, msg);
+        TokenStream tokenStream = assistant.chat(userId, msg);
 
         // UI ui = UI.getCurrent();
         tokenStream.onNext(chunk -> {
@@ -360,6 +352,7 @@ public class AssistantView extends HorizontalLayout {
         })
         .onComplete( c -> {
             // Upsert message once completed
+            System.out.println("User : " + userId);
             System.out.println("BotText: " + botMsg.getText());
             System.out.println("c.content(): " + c.content().text());
             botMsg.setText(c.content().text());

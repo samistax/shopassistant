@@ -12,7 +12,6 @@ import com.samistax.application.views.products.Cart;
 import com.vaadin.flow.component.dependency.NpmPackage;
 import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
-import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.theme.Theme;
 import com.vaadin.flow.theme.lumo.Lumo;
 import javax.sql.DataSource;
@@ -20,14 +19,10 @@ import javax.sql.DataSource;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.cassandra.AstraDbEmbeddingConfiguration;
-import dev.langchain4j.store.embedding.cassandra.AstraDbEmbeddingStore;
-import io.stargate.sdk.json.domain.JsonDocument;
-import io.stargate.sdk.json.domain.SimilarityMetric;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import io.stargate.sdk.data.domain.SimilarityMetric;
+import io.stargate.sdk.data.domain.odm.Document;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.sql.init.SqlDataSourceScriptDatabaseInitializer;
@@ -55,22 +50,6 @@ import java.util.Map;
 @Push
 public class Application implements AppShellConfigurator {
 
-    @Autowired
-    private AstraService astraService;
-
-    // DataStax JSON API Client
-    @Value( "${astra.api.endpoint}" )
-    private String ASTRA_API_ENDPOINT;
-    @Value( "${astra.api.application-token}" )
-    private String ASTRA_TOKEN;
-    @Value( "${astra.api.database-id}" )
-    private String ASTRA_DB_ID;
-    @Value( "${astra.api.database-region}" )
-    private String ASTRA_DB_REGION;
-    //@Value( "${spring.cassandra.keyspace-name}" )
-    private String ASTRA_DB_KEYSPACE = "default_keyspace";
-
-
     private static Cart cart = new Cart();
     public final static String ASTRA_PRODUCT_TABLE = "products";
 
@@ -97,29 +76,16 @@ public class Application implements AppShellConfigurator {
     public Cart getCart() {
         return cart;
     }
+
     @Bean
-    public String loadSampleProductData() {
+    public String loadSampleProductData(AstraService astraService, EmbeddingStore astraDbEmbeddingStore, EmbeddingModel embeddingModel) {
 
         // Get handle to Astra Vector store
-        AstraDBCollection collection = astraService.createCollection(ASTRA_PRODUCT_TABLE, 384, SimilarityMetric.cosine);
+        AstraDBCollection collection = astraService.    createCollection(ASTRA_PRODUCT_TABLE, 384, SimilarityMetric.cosine);
 
-        // Setup Embedding engine
-        EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
-
-        // Create the Store with the builder
-        AstraDbEmbeddingStore astraDbEmbeddingStore = new AstraDbEmbeddingStore(AstraDbEmbeddingConfiguration
-                .builder()
-                .token(ASTRA_TOKEN)
-                .databaseId(ASTRA_DB_ID)
-                .databaseRegion(ASTRA_DB_REGION)
-                .keyspace(ASTRA_DB_KEYSPACE)
-                .table(ASTRA_PRODUCT_TABLE)
-                .dimension(384) // Used with MiniLM-L6-v2 model
-                .build());
-
-        if ( collection != null) {
+        if (collection != null ) {
             // In case policy file not embedded yet then vectorize and persist the content.
-            if ( collection.countDocuments() == 0 ) {
+            if (collection.countDocuments() == 0 ) {
                 try {
                     String resourcePath = "META-INF/resources/footwear_sampledata.csv";
                     // Open the resource file using the class loader
@@ -132,31 +98,35 @@ public class Application implements AppShellConfigurator {
                         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
                         String line;
-                        int id = 1;
+                        int id = 0;
 
                         CsvMapper mapper=new CsvMapper();
                         CsvSchema schema = mapper.schemaFor(Product.class).withColumnSeparator(';');
                         ObjectReader r=mapper.readerFor(Product.class).with(schema);
 
-
                         // Read header
                         reader.readLine();
 
-                        // TODO: Check why the Langchain wrapper throws exception due to missing row_id column in product
                         List<TextSegment> segments = new ArrayList<>();
                         List<Embedding> embeddings = new ArrayList<>();
+                        List<Document<Product>> docs = new ArrayList<>();
 
-                        List<JsonDocument> docs = new ArrayList<>();
-
-
-                        while ((line = reader.readLine()) != null) {
-
+                        while ((line = reader.readLine()) != null ) {
+                            id++;
                             Product p = r.readValue(line);
+
                             if ( p.getDescription().trim().length() > 0 ) {
                                 Map<String, String> metadata = Map.of(
-                                        "id", p.getId(),
-                                        "name", p.getName()
+                                        "pid", p.getPid(),
+                                        "name", p.getName(),
+                                        "color", p.getColor(),
+                                        "description", p.getDescription(),
+                                        "category", p.getCategory(),
+                                        "brand", p.getBrand(),
+                                        "wholesale_price", p.getWholesale_price(),
+                                        "image_url", p.getImage_url()
                                 );
+
                                 TextSegment s = TextSegment.from(p.getDescription(), new Metadata(metadata));
                                 System.out.println("segment: " + s);
                                 segments.add(s);
@@ -164,28 +134,41 @@ public class Application implements AppShellConfigurator {
                                 Embedding textEmbedding = embeddingModel.embed(s).content();
                                 embeddings.add(textEmbedding);
 
-                                // Store embedding to vector store, individually
                                 //astraDbEmbeddingStore.add(textEmbedding,s);
-                                JsonDocument doc = new JsonDocument().data(p)
-                                        .vector(textEmbedding.vector());
+/*
+                                // Store embedding to vector store, individually
+                                docs.add(new Document(p.getId(),p, textEmbedding.vector()));
 
-                                //doc.setId(""+id);
+                                // Flush docs at 20 item interval to operate within Astra Json API guardrail
+                                if ( docs.size() == 20 ) {
 
-                                String result = collection.insertOne(doc);
-                                System.out.println("Result: " + result);
-
-                                id++;
+                                    //List<DocumentMutationResult<Product>> results = collection.insertMany(docs);
+                                    collection.insertManyASync(docs).thenAccept(resultsAsynch -> {
+                                        if (resultsAsynch !=null) {
+                                            resultsAsynch.forEach(res -> {
+                                                if (  res.getStatus() == DocumentMutationStatus.CREATED) {
+                                                    System.out.println(p.getId() + "stored in vector db");
+                                                } else {
+                                                    System.out.println(p.getId() + "vector store failed. " + res.getStatus().toString());
+                                                }
+                                            });
+                                        }
+                                    });
+                                    docs.clear();
+                                    System.out.println("Embedded 20 items:  #" + id );
+                                }
+ */
                             }
-
-                            System.out.println("Embedded items: " + id );
                         }
                         // Close the reader
                         reader.close();
 
-                        System.out.println("embeddings size : " + embeddings.size());
-                        System.out.println("segments size : " + segments.size());
+                        // Store remaining documents
+                        System.out.println("Embedded " + docs.size() + " Count:  #" + id );
+                       // collection.insertMany(docs);
+
                         // Store embedding to vector store, using collections
-                        //astraDbEmbeddingStore.addAll(embeddings, segments);
+                        astraDbEmbeddingStore.addAll(embeddings, segments);
                     } else {
                         // Resource file not found
                         System.out.println("Resource file not found: " + resourcePath);

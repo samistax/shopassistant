@@ -4,6 +4,7 @@ import com.samistax.application.components.ColorPicker;
 import com.samistax.application.views.about.AboutView;
 import com.samistax.application.views.assistant.AssistantView;
 import com.samistax.application.views.checkoutform.CheckoutFormView;
+import com.samistax.application.views.design.DesignView;
 import com.samistax.application.views.feed.FeedView;
 import com.samistax.application.views.productcatalog.ProductCatalogView;
 import com.samistax.application.views.products.ProductsView;
@@ -73,7 +74,8 @@ public class MainLayout extends AppLayout {
 
         nav.addItem(new SideNavItem("(Choose Demo user)", FeedView.class, LineAwesomeIcon.LIST_SOLID.create()));
         nav.addItem(new SideNavItem("Assistant", AssistantView.class, LineAwesomeIcon.COMMENTS.create()));
-        nav.addItem(new SideNavItem("Shop", ProductsView.class, LineAwesomeIcon.TH_LIST_SOLID.create()));
+        nav.addItem(new SideNavItem("Shop", ProductsView.class, LineAwesomeIcon.SHOPPING_BAG_SOLID.create()));
+        nav.addItem(new SideNavItem("Design your shoe", DesignView.class, LineAwesomeIcon.SHOE_PRINTS_SOLID.create()));
         nav.addItem(new SideNavItem("Checkout", CheckoutFormView.class, LineAwesomeIcon.CREDIT_CARD.create()));
         //nav.addItem(new SideNavItem("Product Catalog", ProductCatalogView.class, LineAwesomeIcon.FILTER_SOLID.create()));
         nav.addItem(new SideNavItem("About", AboutView.class, LineAwesomeIcon.FILE.create()));
@@ -111,27 +113,33 @@ public class MainLayout extends AppLayout {
             Integer color_r =  Integer.valueOf( newColor.substring( 1, 3 ), 16 );
             Integer color_g =  Integer.valueOf( newColor.substring( 3, 5 ), 16 );
             Integer color_b =  Integer.valueOf( newColor.substring( 5, 7 ), 16 );
-            int contrast_value = -200;
-            int contrast_r = (color_r.intValue() +contrast_value) % 255;
-            int contrast_g = (color_g.intValue() +contrast_value) % 255;
-            int contrast_b = (color_b.intValue() +contrast_value) % 255;
 
-            //String baseColorVariant = baseColor.substring(0,(baseColor.length()-1));
             String baseColor = "rgba("+color_r+","+color_g+","+color_b;
-            String contrastColor = "rgba("+contrast_r+","+contrast_g+","+contrast_b;
+
+            // Parse the hex color to an integer
+            int color = Integer.parseInt(newColor.substring(1), 16);
+
+            // Invert the color
+            int invertedColor = 0xFFFFFF - color;
+
+            // Make the color web-safe
+            int red = (invertedColor >> 16) & 0xFF;
+            int green = (invertedColor >> 8) & 0xFF;
+            int blue = invertedColor & 0xFF;
+
+            String contrastColor = "rgba("+red+","+green+","+blue;
+            //String contrastColor = "rgba("+contrast_r+","+contrast_g+","+contrast_b;
 
             UI.getCurrent().getElement().getStyle().set("--lumo-base-color", baseColor+")");
             UI.getCurrent().getElement().getStyle().set("--lumo-body-text-color", contrastColor+", 0.5)");
             UI.getCurrent().getElement().getStyle().set("--lumo-primary-text-color",  contrastColor+")");
-            UI.getCurrent().getElement().getStyle().set("--lumo-secondary-text-color", contrastColor+", 0.4)");
+            UI.getCurrent().getElement().getStyle().set("--lumo-secondary-text-color", contrastColor+", 0.66)");
             UI.getCurrent().getElement().getStyle().set("--lumo-tertiary-text-color", contrastColor+", 0.8)");
             UI.getCurrent().getElement().getStyle().set("--lumo-primary-contrast-color", contrastColor+")");
             UI.getCurrent().getElement().getStyle().set("--lumo-primary-color-50pct", baseColor+", 0.5)");
             UI.getCurrent().getElement().getStyle().set("--lumo-text-primary-contrast", contrastColor+")");
             UI.getCurrent().getElement().getStyle().set("--lumo-header-text-color", contrastColor+", 0.9)");
             UI.getCurrent().getElement().getStyle().set("--lumo-contrast-60pct", contrastColor+", 0.4)");
-
-
 
             //UI.getCurrent().getElement().getStyle().set("--lumo-primary-color", contrastColor+",0.5)");
 

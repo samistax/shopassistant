@@ -22,7 +22,7 @@ public class Cart {
     public List<CartItem> addItem(String userId, Product product) {
         // Get user cart
         List<CartItem> cart = getCart(userId);
-        cart.add(new CartItem(product.getId(), product.getName(), product.getBrand(), product.getWholesale_price()));
+        cart.add(new CartItem(product.getPid(), product.getName(), product.getBrand(), product.getWholesale_price()));
         //carts.put(userId, cart );
         // get User cart
         return cart;
