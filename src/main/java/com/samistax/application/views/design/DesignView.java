@@ -75,12 +75,13 @@ public class DesignView extends HorizontalLayout {
         VerticalLayout layout = new VerticalLayout();
         layout.setAlignItems(Alignment.CENTER);
         selectedProduct = VaadinSession.getCurrent().getAttribute(Product.class);
+        /*
         if ( selectedProduct != null ) {
             layout.addClassNames(LumoUtility.Background.CONTRAST_20, Display.FLEX, LumoUtility.FlexDirection.COLUMN, AlignItems.START, Padding.MEDIUM,
                     LumoUtility.BorderRadius.LARGE);
 
             Div div = new Div();
-            div.addClassNames(/*LumoUtility.Background.CONTRAST, */Display.FLEX, AlignItems.CENTER, JustifyContent.CENTER,
+            div.addClassNames(Display.FLEX, AlignItems.CENTER, JustifyContent.CENTER,
                     Margin.Bottom.MEDIUM, LumoUtility.Overflow.HIDDEN, LumoUtility.BorderRadius.MEDIUM, LumoUtility.Width.FULL);
             div.setHeight("160px");
 
@@ -94,6 +95,7 @@ public class DesignView extends HorizontalLayout {
             title.setText(selectedProduct.getCategory());
             layout.add(title, div);
         }
+        */
         Button button = new Button(VaadinIcon.PAPERPLANE.create());
         button.setText("Generate Shoe Design");
         button.addClickListener(event -> submitDesignPrompt());
