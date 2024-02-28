@@ -149,6 +149,7 @@ public class ProductsViewCard extends ListItem {
             ace.setProductId(p.getPid());
             fireEvent(ace);
         });
+        /*
         Button designBtn = new Button(LineAwesomeIcon.SHOE_PRINTS_SOLID.create());
         designBtn.setTooltipText("Click to Design your onw shoe");
         designBtn.addClickListener(event -> {
@@ -158,10 +159,12 @@ public class ProductsViewCard extends ListItem {
             fireEvent(dce);
         });
 
+         */
+
         HorizontalLayout footer = new HorizontalLayout();
         footer.setAlignItems(FlexComponent.Alignment.BASELINE);
         footer.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
-        footer.add(badge, price, buyBtn, assistBtn, designBtn );
+        footer.add(badge, price, buyBtn, assistBtn );
 
         add( div, footer,subtitle,  header,description );
     }
