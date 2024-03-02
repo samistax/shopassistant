@@ -3,6 +3,37 @@
 This project can be used as a starting point to create your own Vaadin application with Spring Boot.
 It contains all the necessary configuration and some placeholder files to get you started.
 
+## Connecting to Astra DB
+To connect this demo applicaiton to your Astra DB vector store you should add a *application.yaml* file to your project. You shoudl place the file in <project root>/config folder. 
+This is a sample yaml file showing what paramaters you need to change to connect to your personal Astra DB. This demo also requires OPEN AI license key which you can define in the same yaml file. 
+
+    # Open AI license key
+    openai:
+      apikey: <YOUR OPEN AI KEY>
+
+    # Astra DB Connection properties  
+    astra:
+      # Allow usage of devops and Stargate apis
+      api:
+        endpoint: <API_ENDPOINT>
+        application-token: <ASTRA_TOKEN>
+        database-id: <ASTRA_DB_ID>
+        database-region: <ASTRA_REGION>
+        default-keyspace: default_keyspace
+        cross-region-failback: false
+        grpc:
+          enabled: true
+      # Connectivity to Cassandra
+      cql:
+        enabled: true
+        download-scb:
+          enabled: true
+
+## Langchain4J configuration
+
+Various Langchain4J features are configured in *AiServiceConfigurator* class, located in package com.samistax.application.ai package.
+
+
 ## Running the application
 
 The project is a standard Maven project. To run it from the command line,

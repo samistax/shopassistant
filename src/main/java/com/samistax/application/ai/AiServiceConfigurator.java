@@ -33,6 +33,10 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 import static dev.ai4j.openai4j.image.ImageModel.DALL_E_QUALITY_HD;
+import static dev.ai4j.openai4j.image.ImageModel.DALL_E_QUALITY_STANDARD;
+import static dev.ai4j.openai4j.image.ImageModel.DALL_E_SIZE_512_x_512;
+import static dev.ai4j.openai4j.image.ImageModel.DALL_E_SIZE_1024_x_1024;
+import static dev.ai4j.openai4j.image.ImageModel.DALL_E_SIZE_256_x_256;
 
 
 @Service
@@ -49,7 +53,6 @@ public class AiServiceConfigurator {
     public  String ASTRA_DEFAULT_KEYSPACE;
 
     private ShopAssistantAgent shopAssistant;
-    private ShopAssistantTools shopAssistantTools;
 
     // Configurable settings from UI
     private OpenAiImageModel imageModel;
@@ -69,6 +72,7 @@ public class AiServiceConfigurator {
         imageModel = OpenAiImageModel.builder()
                 .apiKey(OPENAI_API_KEY)
                 .quality(DALL_E_QUALITY_HD)
+                .size(DALL_E_SIZE_1024_x_1024)
                 .logRequests(true)
                 .logResponses(true)
                 .withPersisting(false)
@@ -79,14 +83,13 @@ public class AiServiceConfigurator {
 
     @Bean
     CassandraChatMemoryStore chatMemoryStore(AstraService astraService) {
-        // TODO: The below Throws Caused by: java.lang.ClassNotFoundException: com.dtsx.astra.sdk.cassio.ClusteredTable
+
         return CassandraChatMemoryStore.builderAstra()
                 .token(ASTRA_TOKEN)
                 .databaseId(UUID.fromString(ASTRA_DB_ID))
                 .databaseRegion(ASTRA_DB_REGION)
-                //.keyspace(ASTRA_DEFAULT_KEYSPACE)
+                .keyspace(ASTRA_DEFAULT_KEYSPACE)
                 .build();
-        //return new CassandraChatMemoryStore(astraService.getAstraClient().cqlSession());
     }
     @Bean
     ChatMemoryProvider chatMemoryProvider(CassandraChatMemoryStore memoryStore) {
@@ -111,7 +114,6 @@ public class AiServiceConfigurator {
                 .chatMemoryProvider(chatMemoryProvider)
                 .chatMemory(memory)
                 .contentRetriever(retriever)
-                //.retriever(retriever)
                 .tools(tool)
                 .build();
 
@@ -129,17 +131,6 @@ public class AiServiceConfigurator {
 
     @Bean
     EmbeddingStore<TextSegment> embeddingStore(AstraService astraService) {
-        // Create new  Astra DB Embedding store instance
-        /*AstraDbEmbeddingStore embeddingStore = new AstraDbEmbeddingStore(AstraDbEmbeddingConfiguration
-                .builder()
-                .token(ASTRA_TOKEN)
-                .databaseId(ASTRA_DB_ID)
-                .databaseRegion(ASTRA_DB_REGION)
-                .keyspace(ASTRA_DEFAULT_KEYSPACE)
-                .table(Application.ASTRA_PRODUCT_TABLE)
-                .dimension(retrieverVectorDimension) // Used with MiniLM-L6-v2 model
-                .build());
-         */
         // Create Astra DB Embedding store from existing collection
         AstraDBCollection collection = astraService.createCollection(Application.ASTRA_PRODUCT_TABLE, retrieverVectorDimension, SimilarityMetric.cosine);
         AstraDbEmbeddingStore embeddingStore = new AstraDbEmbeddingStore(collection);

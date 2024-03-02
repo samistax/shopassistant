@@ -8,6 +8,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.progressbar.ProgressBar;
@@ -117,7 +118,10 @@ public class DesignView extends HorizontalLayout {
         UI ui = UI.getCurrent();
         spinner.setVisible(true);
         inputPanel.setVisible(false);
-        Notification.show("Your shoe design is being created. Hang on tight this might take up to a minute", 2000, Notification.Position.MIDDLE);
+        Notification n = new Notification("Your shoe design is being created. Hang on tight this might take up to a minute", 4000, Notification.Position.MIDDLE);
+        n.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        n.open();
+
         // Start background task
         CompletableFuture.runAsync(() -> {
             // Do some long running task
@@ -139,7 +143,12 @@ public class DesignView extends HorizontalLayout {
                 });
             } catch (Exception e) {
                 Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "submitDesignPrompt threw Exception: " , e);
-                Notification.show("Error: " + e.getMessage(), 2000, Notification.Position.MIDDLE);
+                ui.access(() -> {
+                    spinner.setVisible(false);
+                    Notification error = new Notification(e.getMessage(), 3000, Notification.Position.MIDDLE);
+                    error.addThemeVariants(NotificationVariant.LUMO_ERROR);
+                    error.open();
+                });
             }
         });
     }
