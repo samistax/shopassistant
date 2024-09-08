@@ -10,7 +10,7 @@ import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.memory.chat.TokenWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.embedding.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiImageModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
@@ -20,9 +20,14 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 
 import dev.langchain4j.service.AiServices;
-import dev.langchain4j.store.embedding.astradb.AstraDbEmbeddingStore;
-import dev.langchain4j.store.memory.chat.cassandra.CassandraChatMemoryStore;
+import com.datastax.astra.langchain4j.store.embedding.AstraDbEmbeddingStore;
+import com.datastax.astra.langchain4j.store.memory.AstraDbChatMemoryStore;
+import com.datastax.astra.langchain4j.store.embedding.AstraDbEmbeddingStore;
+import com.datastax.astra.langchain4j.store.memory.AstraDbContent;
+import com.datastax.astra.langchain4j.store.memory.AstraDbChatMessage;
 
+//import dev.langchain4j.store.embedding.astradb.AstraDbEmbeddingStore;
+import dev.langchain4j.store.memory.chat.cassandra.CassandraChatMemoryStore;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 
 import io.stargate.sdk.data.domain.SimilarityMetric;
@@ -84,12 +89,15 @@ public class AiServiceConfigurator {
     @Bean
     CassandraChatMemoryStore chatMemoryStore(AstraService astraService) {
 
-        return CassandraChatMemoryStore.builderAstra()
+        CassandraChatMemoryStore ms = CassandraChatMemoryStore.builderAstra()
                 .token(ASTRA_TOKEN)
                 .databaseId(UUID.fromString(ASTRA_DB_ID))
                 .databaseRegion(ASTRA_DB_REGION)
                 .keyspace(ASTRA_DEFAULT_KEYSPACE)
                 .build();
+        // Create instance ( creating necessary tables in store db)
+        ms.create();
+        return ms;
     }
     @Bean
     ChatMemoryProvider chatMemoryProvider(CassandraChatMemoryStore memoryStore) {

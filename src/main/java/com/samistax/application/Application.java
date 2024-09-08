@@ -47,7 +47,7 @@ import java.util.Map;
 @SpringBootApplication
 @NpmPackage(value = "@fontsource/walter-turncoat", version = "4.5.0")
 @Theme(value = "my-assistant", variant = Lumo.DARK)
-@Push
+
 public class Application implements AppShellConfigurator {
 
     private static Cart cart = new Cart();
@@ -81,7 +81,7 @@ public class Application implements AppShellConfigurator {
     public String loadSampleProductData(AstraService astraService, EmbeddingStore astraDbEmbeddingStore, EmbeddingModel embeddingModel) {
 
         // Get handle to Astra Vector store
-        AstraDBCollection collection = astraService.    createCollection(ASTRA_PRODUCT_TABLE, 384, SimilarityMetric.cosine);
+        AstraDBCollection collection = astraService.createCollection(ASTRA_PRODUCT_TABLE, 384, SimilarityMetric.cosine);
 
         if (collection != null ) {
             // In case policy file not embedded yet then vectorize and persist the content.

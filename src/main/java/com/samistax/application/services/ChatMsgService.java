@@ -150,7 +150,6 @@ public class ChatMsgService {
         if ( collection != null ) {
 
             //result = collection.insertOne(new Document<ChatMsg>().data(msg));
-
             result = collection.insertOne(
                 new JsonDocument()
                         //.id("doc1") // generated if not set

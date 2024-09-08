@@ -77,7 +77,7 @@ public class MainLayout extends AppLayout {
         nav.addItem(new SideNavItem("Shop", ProductsView.class, LineAwesomeIcon.SHOPPING_BAG_SOLID.create()));
         nav.addItem(new SideNavItem("Design your shoe", DesignView.class, LineAwesomeIcon.SHOE_PRINTS_SOLID.create()));
         nav.addItem(new SideNavItem("Checkout", CheckoutFormView.class, LineAwesomeIcon.CREDIT_CARD.create()));
-        //nav.addItem(new SideNavItem("Product Catalog", ProductCatalogView.class, LineAwesomeIcon.FILTER_SOLID.create()));
+        nav.addItem(new SideNavItem("Product Catalog", ProductCatalogView.class, LineAwesomeIcon.FILTER_SOLID.create()));
         nav.addItem(new SideNavItem("About", AboutView.class, LineAwesomeIcon.FILE.create()));
         return nav;
     }

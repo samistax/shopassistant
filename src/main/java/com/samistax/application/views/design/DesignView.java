@@ -23,6 +23,7 @@ import dev.langchain4j.model.openai.OpenAiImageModel;
 import dev.langchain4j.model.output.Response;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -122,15 +123,63 @@ public class DesignView extends HorizontalLayout {
         n.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         n.open();
 
+        // create a buffered image
+        generatedImage.setWidth(300, Unit.PIXELS);
+
+        // Start background task
+        CompletableFuture<dev.langchain4j.data.image.Image> future = CompletableFuture.supplyAsync(() -> {
+            // Do some long running task
+
+            Response<dev.langchain4j.data.image.Image> response = imageModel.generate(promptTemplate+input);
+            System.out.println("Response received. Image created");
+            // Need to use access() when running from background thread
+            ui.access(() -> {
+
+                if ( response.content() != null ) {
+                    generatedImage.setSrc(response.content().url().toString());
+                } else {
+                    generatedImage.setText("Failed to create an image. Please try to revise your input");
+                }
+                // Stop polling and hide spinner
+                ui.setPollInterval(-1);
+                spinner.setVisible(false);
+                inputPanel.setVisible(true);
+            });
+            return response.content();
+        }).exceptionally( e -> {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "submitDesignPrompt threw Exception: ", e);
+            ui.access(() -> {
+                spinner.setVisible(false);
+                Notification error = new Notification(e.getMessage(), 3000, Notification.Position.MIDDLE);
+                error.addThemeVariants(NotificationVariant.LUMO_ERROR);
+                error.open();
+            });
+            return new dev.langchain4j.data.image.Image.Builder().build() ;
+        });
+        future.thenRun(() -> {
+            System.out.println("TAsk completed" + future.isDone());
+            spinner.setVisible(false);
+            inputPanel.setVisible(true);
+            try {
+                generatedImage.setSrc(future.get().url().toString());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        /*
         // Start background task
         CompletableFuture.runAsync(() -> {
             // Do some long running task
             try {
                 Response<dev.langchain4j.data.image.Image> response = imageModel.generate(promptTemplate+input);
+                System.out.println("Response received. Image created");
                 // Need to use access() when running from background thread
                 ui.access(() -> {
                     // create a buffered image
-                    generatedImage.setWidthFull();
+                    generatedImage.setWidth(300, Unit.PIXELS);
                     if ( response.content() != null ) {
                         generatedImage.setSrc(response.content().url().toString());
                     } else {
@@ -151,5 +200,7 @@ public class DesignView extends HorizontalLayout {
                 });
             }
         });
+
+         */
     }
 }

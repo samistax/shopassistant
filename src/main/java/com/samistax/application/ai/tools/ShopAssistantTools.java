@@ -7,7 +7,7 @@ import com.samistax.application.data.astra.json.Product;
 import com.samistax.application.services.AstraService;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.stargate.sdk.data.domain.odm.DocumentResult;
 import io.stargate.sdk.data.domain.query.Filter;
